@@ -1,0 +1,240 @@
+\documentclass[12pt]{article}
+
+\usepackage[parfill]{parskip}
+\usepackage[tight]{subfigure}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{fullpage}
+\usepackage{hyperref}
+\usepackage{latexsym}
+\usepackage{mathtools}
+
+\DeclareMathOperator*{\tr}{\mathrm{tr}}
+\DeclareMathOperator*{\diag}{\mathrm{diag}}
+
+\title{Sparse linear-quadratic regulator}
+\author{Matt Wytock}
+
+\begin{document}
+
+\maketitle
+
+\section{Problem}
+We have a system defined by
+\begin{equation}
+\begin{split}
+\dot{x} &= Ax + Bu + w
+\end{split}
+\end{equation}
+where $w$ is random with covariance $E[ww^T] = W$. We wish to find a feedback
+controller
+\begin{equation}
+u = Kx
+\end{equation}
+minimizing the quadratic objective
+\begin{equation}
+J = \int_0^\infty \left[ x(\tau)^TQx(\tau) + u(\tau)^TRu(\tau) \right] d\tau.
+\end{equation}
+This is equivalent to
+\begin{equation}
+J = \tr WP(K)
+\end{equation}
+where $K \in \mathcal{D}_s$, the set of stabilizing feedback gains
+\begin{equation}
+\mathcal{D}_s = \{ K | Re\{\lambda(A + BK)\} < 0 \}
+\end{equation}
+and $P(K)$ is the unique solution to the Lyapunov equation
+\begin{equation}
+(A + BK)^TP + P(A + BK) + (Q + K^TRK) = 0.
+\end{equation}
+
+\section{Differentials}
+We begin with the differential for the matrix-valued function $P(K)$. Let
+\begin{equation}
+\psi(P,K) = (A + BK)^TP + P(A + BK) + (Q + K^TRK)
+\end{equation}
+and we have the partials
+\begin{equation}
+\begin{split}
+\psi_P(P,K) &= (A + BK)^TdP + dP(A + BK) \\
+\psi_K(P,K) &= (BdK)^TP + PBdK + dK^TRK + K^TRdK
+\end{split}
+\end{equation}
+which for a given $K$ and $dK$ results in the Lyapunov equation
+\begin{equation}
+\label{eq-lyap-pdiff}
+(A + BK)^T\tilde{P} + \tilde{P}(A + BK) + dK^T(B^TP + RK) + (PB + K^TR)dK = 0
+\end{equation}
+where $P = P(K)$ and $\tilde{P} = P'(K)dK$ is the unique solution. This gives us an
+expression for the differential of the objective
+\begin{equation}
+J'(K)dK = \tr P'(K)dKW.
+\end{equation}
+However, in order to write the derivative in gradient form we need an
+expression
+\begin{equation}
+J'(K)dK = \tr \nabla J(K)^TdK.
+\end{equation}
+Let $L$ be the solution to the Lyapunov equation
+\begin{equation}
+\label{eq-lyap-l}
+(A + BK)L + L(A + BK)^T + W = 0
+\end{equation}
+and by multiplying \eqref{eq-lyap-pdiff} by $L$, \eqref{eq-lyap-l} by $\tilde{P}$ and taking
+the trace we get
+\begin{equation}
+\label{eq-diff1}
+\tr P'(K) dKW = 2 \tr L(PB + K^TR)dK
+\end{equation}
+which results in our equation for the derivative
+\begin{equation}
+\nabla J(K) = 2(B^TP + RK)L
+\end{equation}
+Continuing, we can compute the second differential from \eqref{eq-diff1} as
+\begin{equation}
+\begin{split}
+J''(K)(dK,dK) &= 2 \tr  [ L'(K)dK(P(K)B + K^TR)dK  + \\
+&  \quad L(K)(P'(K)dKB + dK^TR)dK ] \\
+&= 2 \tr H(K,dK) dK
+\end{split}
+\end{equation}
+where
+\begin{equation}
+H(K,dK) = \tilde{L}(PB + K^TR) + L(\tilde{P}B + dK^TR)
+\end{equation}
+and $\tilde L = L'(K)dK$ and $\tilde P = P'(K) dK$ are the unique solutions to
+\eqref{eq-lyap-pdiff} and
+\begin{equation}
+\label{eq-lyap-ldiff}
+(A + BK)\tilde{L} + \tilde{L}(A + BK)^T + BdKL + LdK^TB^T = 0
+\end{equation}
+respectively.
+
+\section{Second-order approximation}
+
+In this section we derive an explicit form of the second-order approximation
+which we will need for the coordinate descent updates and to write down the
+Hessian. Let $D$ be an arbitrary direction, the second order approximation at $K$ is
+given by
+\begin{equation}
+\label{eq-approx}
+g(K,D) = 2 \tr L(PB + K^TR)D + \tr \tilde{L}(PB + K^TR)D + \tr L(\tilde{P}B + D^TR)D.
+\end{equation}
+where $\tilde{L}$ and $\tilde{P}$ are the solutions to Lyapunov equations that
+depend on $D$. In general notation they have the form
+\begin{equation}
+AX + XA^T + Q(D) = 0
+\end{equation}
+which we can solve for $X$ by taking the eigendecomposition $A = U\Lambda U^{-1}$. This gives
+\begin{equation}
+\begin{split}
+U\Lambda U^{-1}X + XU^{-T}\Lambda U^T + Q(D) &= 0 \\
+\Lambda U^{-1}XU^{-T}X + U^{-1}XU^{-T}\Lambda &= -U^{-1}Q(D)U^{-T}
+\end{split}
+\end{equation}
+which we can solve by noting that $\Lambda$ is diagonal with elements
+$\lambda_1,\ldots,\lambda_n$ and thus
+\begin{equation}
+\label{eq-lyap-explicit}
+X = U(-U^{-1}Q(D)U^{-T} \circ \Theta)U^T
+\end{equation}
+where $\Theta_{ij} = 1 /(\lambda_i + \lambda_j)$. Applying the above to the
+Lyapunov equations \eqref{eq-lyap-pdiff} and  \eqref{eq-lyap-ldiff} we get the
+explicit forms
+\begin{equation}
+\label{eq-lyap-explicit-diff}
+\begin{split}
+\tilde{P} &= -U^{-T} \left(U^T (D^T(B^TP + RK) + (PB +
+K^TR)D) U \circ \Theta \right)U^{-1}, \\
+\tilde{L} &= -U \left( U^{-1} (BDL + LD^TB^T) U^{-T} \circ \Theta \right) U^T
+\end{split}
+\end{equation}
+where $U\Lambda U^{-1}$ is the eigendecomposition of $A + BK$.
+
+Since $\Theta$ is complex symmetric we can take the Autonne-Takagi factorization and
+write $\Theta = U\Sigma U^T = XX^T$. Furthermore, we typically have that
+$\Theta$ is low rank and thus we can take $XX^T \approx \sum_{i=1}^k x_ix_i^*$
+with $k \ll n$.
+
+\section{Coordinate descent updates}
+
+Let $E = PB + K^TR$ and we can rewrite \eqref{eq-approx} as
+\begin{equation}
+g(K,D) = 2 \tr LED + \tr \tilde{L}ED + \tr L\tilde{P}BD + \tr LD^TRD.
+\end{equation}
+Plugging in the the explicit solutions to the Lyapunov equations from
+\eqref{eq-lyap-explicit-diff}, we have
+\begin{equation}
+\begin{split}
+\tr \tilde{L}ED &= - \tr U \left( U^{-1} (BDL + LD^TB^T) U^{-T} \circ \Theta \right) U^TED \\
+&\approx - \tr  U\left( \sum_{i=1}^k \diag(x_i) U^{-1}(BDL + LD^TB^T)U^{-T})
+  \diag(x_i) \right) U^TED \\
+&= \sum_{i=1}^k -\tr X_i BDL X_i^TED  - \tr X_i(BDL)^TX_i^TED
+\end{split}
+\end{equation}
+where $X_i = U\diag(x_i)U^{-1}$. We also have
+\begin{equation}
+\begin{split}
+\tr L\tilde{P}BD &= -\tr U^{-T} \left(U^T (D^TE^T + ED) U \circ \Theta \right)U^{-1}BDL \\
+&\approx -\tr U^{-T} \left(\sum_{i=1}^k \diag(x_i) U^T (D^TE^T + ED) U \diag(x_i) \right)U^{-1}BDL \\
+&= \sum_{i=1}^k -\tr X_i^T(ED)^TX_iBDL - \tr X_i^TED X_i BDL
+\end{split}
+\end{equation}
+Noting that these are equivalent, we can rewrite the second-order approximation as
+\begin{equation}
+g(K,D) = 2 \tr LED + \tr LD^TRD - 2 \left( \sum_{i=1}^k \tr X_i^T(ED)^TX_iBDL + \tr X_i^TED X_i BDL \right).
+\end{equation}
+To derive the coordinatewise updates let $D = D + \mu e_ie_j^T$ and we
+take the minimum over $\mu$. First, we consider the terms inside the sum and
+drop the subscript on $X_i$ for brevity and for the first term we have
+\begin{equation}
+\begin{split}
+\arg \min_\mu & \tr  X^T(D + \mu e_ie_j^T)^TE^TXB(D + \mu e_ie_j^T)L \\
+= \arg \min_\mu & \mu \tr X^Te_je_i^T E^TXBDL + \mu \tr X^TD^TE^TXB e_ie_j^TL +
+\mu^2 X^Te_je_i^TE^TXBe_ie_j^TL \\
+= \arg\min_\mu & \mu (E^TXBDLX^T)_{ij} + \mu(B^TX^TEDXL)_{ij} + \mu^2(E^TXB)_{ii}(LX^T)_{jj}.
+\end{split}
+\end{equation}
+Similarly, for the second term we have
+\begin{equation}
+\begin{split}
+\arg\min_\mu  &\tr X^TE(D +\mu e_ie_j^T) X B(D + \mu e_ie_j^T)L \\
+= \arg\min_\mu & \mu \tr X^T E e_ie_j^TXBDL + \mu \tr X^TEDXBe_ie_j^TL + \mu^2
+X^TEe_ie_j^TXBe_ie_j^TL \\
+= \arg\min_\mu & \mu (XBDLX^TE)_{ji} + \mu (LX^TEDXB)_{ji} + \mu^2 (LX^TE)_{ji}(XB)_{ji}.
+\end{split}
+\end{equation}
+Finally, for the first terms outside of the sum we have
+\begin{equation}
+\begin{split}
+\arg\min_\mu  & 2 \tr LE(D + \mu e_ie_j^T) + \tr L(D + \mu e_ie_j^T)^TR(D + \mu e_ie_j^T)  \\
+= \arg\min_\mu & 2 \mu \tr LEe_ie_j^T + 2 \mu \tr Le_je_i^TRD + \mu^2 \tr
+Le_je_i^TRe_ie_j^T \\
+= \arg\min_\mu & 2 \mu (LE)_{ji} + 2\mu (RDL)_{ij} + \mu^2 L_{jj}R_{ii}
+\end{split}
+\end{equation}
+Combining these expressions and adding $\ell_1$ regularization, we have
+\begin{equation}
+\arg \min_\mu g(K, D + \mu e_ie_j^T) + \lambda\|K + D + \mu e_ie_j^T\|_1 = \arg
+\min_\mu \frac{1}{2} a^2 \mu + b \mu + \lambda \|c + \mu \|_1
+\end{equation}
+where
+\begin{equation}
+\begin{split}
+a &= 2 R_{ii}L_{jj} - 4 \left( \sum_{k=1}^r (E^TX_kB)_{ii}(LX_k^T)_{jj}
++ (LX^TE)_{ji}(XB)_{ji} \right) \\
+b &= 2 (E^TL)_{ij} + 2(RDL)_{ij} \\
+& - 2\left( \sum_{k=1}^r (E^TX_kBDLX_k^T)_{ij} +
+(B^TX_k^TEDX_kL)_{ij} + (X_kBDLX_k^TE)_{ji} + (LX_k^TEDX_kB)_{ji} \right) \\
+c &= K_{ij} + D_{ij}
+\end{split}
+\end{equation}
+which has the closed form solution
+\begin{equation}
+\mu = -c + S_{\lambda/a}\left( c - \frac{b}{a} \right)
+\end{equation}
+where $S_\lambda$ is the soft-thresholding operator.
+
+
+\end{document}
